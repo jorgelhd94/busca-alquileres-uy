@@ -122,14 +122,37 @@ th, td { text-align: left; padding: 11px 16px 11px 0; border-bottom: 1px solid v
 th { font-size: 13px; color: var(--muted); font-weight: 600; }
 td small { color: var(--muted); }
 
+.panel { display: grid; gap: 12px; min-width: 0; }
+.abrir { display: none; justify-self: start; }
+.abrir svg { width: 16px; height: 16px; }
+.clear[hidden] + .label { margin-left: 0; }
+
 @media (max-width: 900px) {
   .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-  .top .wrap { flex-wrap: wrap; gap: 12px; }
+  .top .wrap { flex-wrap: wrap; gap: 12px; padding-block: 12px; }
+  .brand { font-size: 18px; }
+  .brand svg { width: 28px; height: 28px; }
   .search { order: 3; flex-basis: 100%; max-width: none; height: 50px; }
-  .stamp { margin-left: auto; }
-  .filters { position: static; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 22px 12px; }
-  .price input { width: 92px; }
+  .stamp { margin-left: auto; font-size: 12px; }
+  .stamp b { font-size: 13px; }
+  .filters .wrap { gap: 10px; padding-block: 8px 12px; }
+  .tabs { gap: 22px; }
+  .tab { font-size: 14px; }
+  .tab .ico { width: 24px; height: 24px; }
+  .abrir { display: inline-flex; }
+  .panel { display: none; }
+  .filters.open .panel { display: grid; }
+  .controls { flex-direction: column; align-items: stretch; gap: 12px; }
+  .group { justify-content: space-between; }
+  .price input { width: auto; flex: 1; min-width: 0; }
+  .summary h1 { font-size: 19px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 26px 16px; }
+}
+@media (max-width: 560px) {
+  .grid { grid-template-columns: 1fr; gap: 28px; }
+  .photo { aspect-ratio: 1 / 0.82; }
+  .meta h3 { font-size: 16px; }
+  .meta p { font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
 </style>
@@ -151,6 +174,11 @@ td small { color: var(--muted); }
 <section class="filters" aria-label="Filtros">
   <div class="wrap">
     <div class="line scroll tabs" id="sitios"></div>
+    <button class="chip abrir" type="button" id="abrir" aria-expanded="false" aria-controls="panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      Filtros <small id="nf"></small>
+    </button>
+    <div class="panel" id="panel">
     <div class="line scroll" id="zonas"></div>
     <div class="line controls">
       <div class="group price">
@@ -162,15 +190,7 @@ td small { color: var(--muted); }
       <div class="group"><span class="label">Dorm.</span><div class="seg" id="dorm"></div></div>
       <div class="group"><span class="label">Tipo</span><div class="seg" id="tipo"></div></div>
       <div class="group" id="toggles"></div>
-      <div class="group">
-        <label class="label" for="orden">Ordenar</label>
-        <select class="sort" id="orden">
-          <option value="nuevas">Más nuevas</option>
-          <option value="precio-asc">Menor precio</option>
-          <option value="precio-desc">Mayor precio</option>
-          <option value="dorm-desc">Más dormitorios</option>
-        </select>
-      </div>
+    </div>
     </div>
   </div>
 </section>
@@ -179,7 +199,16 @@ td small { color: var(--muted); }
   <div class="wrap">
     <div class="summary">
       <h1 id="total"></h1>
-      <button class="clear" type="button" id="limpiar">Limpiar filtros</button>
+      <div class="group">
+        <button class="clear" type="button" id="limpiar">Limpiar filtros</button>
+        <label class="label" for="orden">Ordenar</label>
+        <select class="sort" id="orden">
+          <option value="nuevas">Más nuevas</option>
+          <option value="precio-asc">Menor precio</option>
+          <option value="precio-desc">Mayor precio</option>
+          <option value="dorm-desc">Más dormitorios</option>
+        </select>
+      </div>
     </div>
     <div class="grid" id="grid"></div>
     <div id="extra"></div>
@@ -440,6 +469,8 @@ td small { color: var(--muted); }
     total.textContent = lista.length + (lista.length === 1 ? ' aviso' : ' avisos');
     if (lista.length !== PUBS.length) total.append(el('small', null, 'de ' + PUBS.length));
     document.getElementById('limpiar').hidden = JSON.stringify(f) === JSON.stringify(INICIAL);
+    const activos = f.zonas.length + (f.pmin !== '') + (f.pmax !== '') + (f.dorm !== 'todos') + (f.tipo !== 'todos') + f.nuevas + f.amueblado + f.foto;
+    document.getElementById('nf').textContent = activos ? '(' + activos + ')' : '';
 
     if (!PUBS.length) {
       grid.replaceChildren();
@@ -457,6 +488,12 @@ td small { color: var(--muted); }
     if (CORRIDAS.length) extra.push(historial());
     document.getElementById('extra').replaceChildren(...extra);
   }
+
+  const abrir = document.getElementById('abrir');
+  abrir.addEventListener('click', () => {
+    const abierto = document.querySelector('.filters').classList.toggle('open');
+    abrir.setAttribute('aria-expanded', String(abierto));
+  });
 
   const q = document.getElementById('q');
   q.value = f.q;
