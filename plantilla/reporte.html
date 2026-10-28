@@ -89,7 +89,9 @@ button, input, select { font: inherit; color: inherit; }
 .clear { border: 0; background: none; text-decoration: underline; font-weight: 600; cursor: pointer; padding: 4px 0; }
 
 /* Grilla */
-main .wrap { padding-block: 24px 64px; display: grid; gap: 28px; }
+main .wrap { padding-block: 24px 64px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+/* Ningún bloque (por ejemplo la tabla del historial) puede ensanchar la columna: lo ancho se desliza dentro de su recuadro. */
+main .wrap > *, #extra > * { min-width: 0; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 28px 18px; }
 .card { display: grid; gap: 10px; min-width: 0; align-content: start; }
 .photo { position: relative; aspect-ratio: 1 / 0.95; border-radius: var(--radius); overflow: hidden; }
@@ -123,6 +125,9 @@ table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-nu
 th, td { text-align: left; padding: 11px 16px 11px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { font-size: 13px; color: var(--muted); font-weight: 600; }
 td small { color: var(--muted); }
+/* Las notas pueden ser largas: hacen salto de línea en vez de estirar la tabla. */
+td:last-child { white-space: normal; min-width: 220px; }
+#extra { display: grid; gap: 28px; min-width: 0; }
 
 .panel { display: grid; gap: 12px; min-width: 0; }
 .filters .wrap > *, .panel > * { min-width: 0; }
@@ -145,6 +150,8 @@ td small { color: var(--muted); }
   .abrir { display: inline-flex; }
   .panel { display: none; }
   .filters.open .panel { display: grid; }
+  /* Con el panel abierto la barra deja de quedar fija: si no, taparía media pantalla al bajar. */
+  .filters.open { position: static; }
   .controls { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 12px; }
   .group { justify-content: space-between; }
   .controls .group { flex-wrap: nowrap; min-width: 0; }
