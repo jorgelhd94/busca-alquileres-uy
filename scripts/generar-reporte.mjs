@@ -32,7 +32,7 @@ for (const p of publicaciones) {
 
 const corridas = db
   .prepare(`
-    SELECT c.id, c.fecha, c.creada, c.criterios, c.notas,
+    SELECT c.id, c.fecha, c.creada, c.notas,
       ${PLATAFORMAS.map(
         (pl) => `sum(p.plataforma = '${pl}') AS ${pl}, sum(p.plataforma = '${pl}' AND cp.nueva = 1) AS ${pl}_nuevas`
       ).join(',\n      ')}
@@ -44,7 +44,8 @@ const corridas = db
     LIMIT 60
   `)
   .all()
-  .map((c) => ({ ...c, criterios: JSON.parse(c.criterios ?? 'null'), notas: JSON.parse(c.notas ?? '{}') }));
+  // Los criterios del usuario (presupuesto, zonas) no se incluyen: el reporte puede ser público.
+  .map((c) => ({ ...c, notas: JSON.parse(c.notas ?? '{}') }));
 
 const datos = { generado: ahora(), publicaciones, corridas };
 const json = JSON.stringify(datos).replace(/</g, '\\u003c');

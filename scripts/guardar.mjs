@@ -12,6 +12,8 @@ const DESCARGAS_EN_PARALELO = 6;
 const ESPERA_FOTO_MS = 10_000;
 // Los avisos que no aparecen en ninguna búsqueda durante este tiempo se borran de la base.
 const DIAS_PARA_BORRAR = 60;
+// Servidores de imágenes de cada sitio: las fotos solo se bajan de aquí (ver normalizarImagen).
+const HOSTS_DE_FOTOS = [/(^|\.)mlstatic\.com$/, /(^|\.)infocasas\.com\.uy$/, /(^|\.)gallito\.com$/, /(^|\.)fbcdn\.net$/];
 const EXTENSIONES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 
 const archivo = process.argv[2];
@@ -72,10 +74,12 @@ for (const p of entrada.publicaciones ?? []) {
   });
 }
 
-// Las fotos conservan su query (muchos CDN lo usan para firmar el link), pero solo se aceptan http(s).
+// Las fotos solo se bajan por https y de los servidores de imágenes de cada sitio, nunca de otra dirección
+// (por ejemplo de la red local), porque la URL sale de páginas de terceros.
+// Conservan su query: muchos CDN lo usan para firmar el link.
 function normalizarImagen(url) {
   const u = new URL(url);
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  if (u.protocol !== 'https:' || u.port || !HOSTS_DE_FOTOS.some((re) => re.test(u.hostname))) return null;
   return u.toString();
 }
 
@@ -177,12 +181,23 @@ for (const v of viejas) if (v.foto) rmSync(join(DATOS, 'fotos', v.foto), { force
 const guardarFoto = db.prepare('UPDATE publicaciones SET foto = ? WHERE id = ?');
 async function descargar(fila) {
   try {
-    const r = await fetch(fila.imagen_url, { signal: AbortSignal.timeout(ESPERA_FOTO_MS) });
+    // La base puede tener URLs guardadas antes de la lista de servidores permitidos: se vuelven a validar.
+    if (!normalizarImagen(fila.imagen_url)) throw new Error('servidor no permitido');
+    // Sin seguir redirecciones: una redirección podría llevar a otra dirección.
+    const r = await fetch(fila.imagen_url, { redirect: 'manual', signal: AbortSignal.timeout(ESPERA_FOTO_MS) });
     const tipo = (r.headers.get('content-type') ?? '').split(';')[0].trim();
     const ext = EXTENSIONES[tipo];
-    if (!r.ok || !ext) throw new Error('sin imagen');
-    const bytes = Buffer.from(await r.arrayBuffer());
-    if (bytes.length > MAX_BYTES_FOTO) throw new Error('muy grande');
+    if (r.status !== 200 || !ext) throw new Error('sin imagen');
+    if (Number(r.headers.get('content-length') ?? 0) > MAX_BYTES_FOTO) throw new Error('muy grande');
+    // Lee de a partes y corta apenas pasa el límite, sin cargar en memoria una respuesta enorme.
+    const partes = [];
+    let total = 0;
+    for await (const parte of r.body) {
+      total += parte.length;
+      if (total > MAX_BYTES_FOTO) throw new Error('muy grande');
+      partes.push(parte);
+    }
+    const bytes = Buffer.concat(partes);
     const nombre = `${fila.id}.${ext}`;
     writeFileSync(join(DATOS, 'fotos', nombre), bytes);
     guardarFoto.run(nombre, fila.id);
