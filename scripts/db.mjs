@@ -1,5 +1,5 @@
 // Base SQLite compartida por guardar.mjs y generar-reporte.mjs.
-// Usa node:sqlite (Node 22.5+), sin dependencias externas.
+// Usa node:sqlite (Node 22.13+ sin opciones; en 22.5 a 22.12 pide --experimental-sqlite), sin dependencias externas.
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -11,6 +11,14 @@ export const PLATAFORMAS = ['mercadolibre', 'infocasas', 'gallito', 'facebook'];
 
 const ZONA_HORARIA = 'America/Montevideo';
 
+// Sitios donde el aviso se identifica por la ruta: ahí el query es solo rastreo y se puede quitar.
+const SIN_QUERY = [
+  /(^|\.)infocasas\.com\.uy$/,
+  /(^|\.)gallito\.com\.uy$/,
+  /(^|\.)facebook\.com$/,
+  /^(apartamento|casa|articulo|inmueble|terreno|local|oficina)\.mercadolibre\.com\.uy$/,
+];
+
 export function hoy() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: ZONA_HORARIA });
 }
@@ -19,11 +27,13 @@ export function ahora() {
   return new Date().toLocaleString('sv-SE', { timeZone: ZONA_HORARIA });
 }
 
-// Quita parámetros de rastreo para que el mismo aviso no se guarde dos veces.
+// Normaliza la URL de un aviso para que el mismo aviso no se guarde dos veces.
+// Lanza un error si no es una URL absoluta http(s): una URL relativa o javascript: no se guarda.
 export function normalizarUrl(url) {
   const u = new URL(url);
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error(`protocolo no permitido: ${u.protocol}`);
   u.hash = '';
-  u.search = '';
+  if (SIN_QUERY.some((re) => re.test(u.hostname))) u.search = '';
   return u.toString().replace(/\/$/, '');
 }
 

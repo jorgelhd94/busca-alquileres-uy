@@ -1,13 +1,18 @@
 // Guarda una corrida en SQLite.
 // Uso: node scripts/guardar.mjs <corrida.json>
-// Guarda como máximo 50 publicaciones por plataforma, priorizando las de
-// fecha de publicación más reciente (y, a igual fecha, las que nunca se vieron).
-import { readFileSync, writeFileSync } from 'node:fs';
+// Guarda como máximo 50 publicaciones por plataforma, repartidas entre zonas y, dentro de cada zona,
+// priorizando las de fecha de publicación más reciente (y, a igual fecha, las que nunca se vieron).
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { abrirDb, hoy, ahora, normalizarUrl, PLATAFORMAS, DATOS } from './db.mjs';
 
 const MAX_POR_PLATAFORMA = 50;
 const MAX_BYTES_FOTO = 150_000;
+const DESCARGAS_EN_PARALELO = 6;
+const ESPERA_FOTO_MS = 10_000;
+// Los avisos que no aparecen en ninguna búsqueda durante este tiempo se borran de la base.
+const DIAS_PARA_BORRAR = 60;
+const EXTENSIONES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 
 const archivo = process.argv[2];
 if (!archivo) {
@@ -19,19 +24,59 @@ const entrada = JSON.parse(readFileSync(archivo, 'utf8'));
 const db = abrirDb();
 const buscarPorUrl = db.prepare('SELECT id FROM publicaciones WHERE url = ?');
 
+// node:sqlite solo acepta texto, números o null: cualquier otra cosa se descarta en vez de romper la corrida.
+const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : null);
+const numero = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const fecha = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+
 const porPlataforma = new Map(PLATAFORMAS.map((p) => [p, new Map()]));
 const errores = [];
 for (const p of entrada.publicaciones ?? []) {
-  if (!PLATAFORMAS.includes(p.plataforma)) {
-    errores.push(`plataforma desconocida: ${p.plataforma}`);
+  const resumen = JSON.stringify(p).slice(0, 80);
+  if (!PLATAFORMAS.includes(p?.plataforma)) {
+    errores.push(`plataforma desconocida: ${resumen}`);
     continue;
   }
-  if (!p.url || !p.titulo) {
-    errores.push(`falta url o título: ${JSON.stringify(p).slice(0, 80)}`);
+  const titulo = texto(p.titulo);
+  let url;
+  try {
+    url = normalizarUrl(p.url);
+  } catch (e) {
+    errores.push(`url inválida (${e.message}): ${resumen}`);
     continue;
   }
-  const url = normalizarUrl(p.url);
-  porPlataforma.get(p.plataforma).set(url, { ...p, url, yaVista: Boolean(buscarPorUrl.get(url)) });
+  if (!titulo) {
+    errores.push(`falta título: ${resumen}`);
+    continue;
+  }
+  let imagen = null;
+  try {
+    imagen = p.imagen_url ? normalizarImagen(p.imagen_url) : null;
+  } catch {
+    imagen = null;
+  }
+  porPlataforma.get(p.plataforma).set(url, {
+    url,
+    titulo,
+    departamento: texto(p.departamento),
+    zona: texto(p.zona),
+    tipo: texto(p.tipo),
+    dormitorios: numero(p.dormitorios),
+    precio: numero(p.precio),
+    moneda: texto(p.moneda),
+    extras: Array.isArray(p.extras) ? JSON.stringify(p.extras.filter((e) => typeof e === 'string')) : null,
+    descripcion: texto(p.descripcion),
+    fecha_publicacion: fecha(p.fecha_publicacion),
+    imagen_url: imagen,
+    yaVista: Boolean(buscarPorUrl.get(url)),
+  });
+}
+
+// Las fotos conservan su query (muchos CDN lo usan para firmar el link), pero solo se aceptan http(s).
+function normalizarImagen(url) {
+  const u = new URL(url);
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  return u.toString();
 }
 
 // Más recientes primero; sin fecha al final; a igual fecha, las no vistas primero.
@@ -42,12 +87,28 @@ function ordenar(a, b) {
   return Number(a.yaVista) - Number(b.yaVista);
 }
 
-const fecha = hoy();
+// Elige hasta `max` avisos tomando por turnos de cada zona, así el tope no se lo lleva la primera zona buscada.
+function elegir(candidatas, max) {
+  const zonas = new Map();
+  for (const p of candidatas) {
+    const z = p.zona ?? p.departamento ?? '';
+    if (!zonas.has(z)) zonas.set(z, []);
+    zonas.get(z).push(p);
+  }
+  const colas = [...zonas.values()].map((lista) => lista.sort(ordenar));
+  const elegidas = [];
+  while (elegidas.length < max && colas.some((c) => c.length)) {
+    for (const c of colas) if (c.length && elegidas.length < max) elegidas.push(c.shift());
+  }
+  return elegidas;
+}
+
+const dia = hoy();
 const upsert = db.prepare(`
   INSERT INTO publicaciones (plataforma, url, titulo, departamento, zona, tipo, dormitorios,
     precio, moneda, extras, descripcion, fecha_publicacion, imagen_url, primera_vez, ultima_vez)
   VALUES (:plataforma, :url, :titulo, :departamento, :zona, :tipo, :dormitorios,
-    :precio, :moneda, :extras, :descripcion, :fecha_publicacion, :imagen_url, :fecha, :fecha)
+    :precio, :moneda, :extras, :descripcion, :fecha_publicacion, :imagen_url, :dia, :dia)
   ON CONFLICT(url) DO UPDATE SET
     titulo = excluded.titulo,
     departamento = coalesce(excluded.departamento, departamento),
@@ -62,7 +123,7 @@ const upsert = db.prepare(`
     imagen_url = coalesce(excluded.imagen_url, imagen_url),
     ultima_vez = excluded.ultima_vez,
     veces_visto = veces_visto + 1
-  RETURNING id, foto, imagen_url
+  RETURNING id, foto, imagen_url, primera_vez
 `);
 const enlazar = db.prepare(
   'INSERT OR IGNORE INTO corrida_publicaciones (corrida_id, publicacion_id, nueva) VALUES (?, ?, ?)'
@@ -73,59 +134,70 @@ const sinFoto = [];
 db.exec('BEGIN');
 const { lastInsertRowid: corridaId } = db
   .prepare('INSERT INTO corridas (fecha, creada, criterios, notas) VALUES (?, ?, ?, ?)')
-  .run(fecha, ahora(), JSON.stringify(entrada.criterios ?? null), JSON.stringify(entrada.notas ?? {}));
+  .run(dia, ahora(), JSON.stringify(entrada.criterios ?? null), JSON.stringify(entrada.notas ?? {}));
 
 for (const [plataforma, mapa] of porPlataforma) {
-  const candidatas = [...mapa.values()].sort(ordenar);
-  const elegidas = candidatas.slice(0, MAX_POR_PLATAFORMA);
-  for (const p of elegidas) {
-    const fila = upsert.get({
-      plataforma,
-      url: p.url,
-      titulo: p.titulo,
-      departamento: p.departamento ?? null,
-      zona: p.zona ?? null,
-      tipo: p.tipo ?? null,
-      dormitorios: Number.isFinite(p.dormitorios) ? p.dormitorios : null,
-      precio: Number.isFinite(p.precio) ? p.precio : null,
-      moneda: p.moneda ?? null,
-      extras: Array.isArray(p.extras) ? JSON.stringify(p.extras) : null,
-      descripcion: p.descripcion ?? null,
-      fecha_publicacion: p.fecha_publicacion ?? null,
-      imagen_url: p.imagen_url ?? null,
-      fecha,
-    });
-    enlazar.run(corridaId, fila.id, p.yaVista ? 0 : 1);
-    if (!fila.foto && fila.imagen_url) sinFoto.push(fila);
+  const candidatas = [...mapa.values()];
+  const elegidas = elegir(candidatas, MAX_POR_PLATAFORMA);
+  let guardadas = 0, nuevas = 0, nuevasHoy = 0;
+  for (const { yaVista, ...p } of elegidas) {
+    // Un aviso que SQLite rechaza se anota y se sigue con el resto: nunca se pierde la corrida entera.
+    try {
+      const fila = upsert.get({ plataforma, ...p, dia });
+      enlazar.run(corridaId, fila.id, yaVista ? 0 : 1);
+      guardadas++;
+      if (!yaVista) nuevas++;
+      if (fila.primera_vez === dia) nuevasHoy++;
+      if (fila.foto == null && fila.imagen_url) sinFoto.push(fila);
+    } catch (e) {
+      errores.push(`no se pudo guardar (${e.message}): ${p.url}`);
+    }
   }
   resumen[plataforma] = {
     recibidas: candidatas.length,
-    guardadas: elegidas.length,
-    nuevas: elegidas.filter((p) => !p.yaVista).length,
+    guardadas,
+    nuevas,
+    nuevas_hoy: nuevasHoy,
     fuera_por_tope: Math.max(0, candidatas.length - MAX_POR_PLATAFORMA),
   };
 }
-db.exec('COMMIT');
 
-// Descarga las fotos nuevas. Las páginas de los sitios no se pueden cargar desde el
-// artefacto, así que la foto se guarda en local y el reporte la incrusta.
+// Limpieza: borra los avisos que no se vieron en los últimos DIAS_PARA_BORRAR días.
+const limite = new Date(Date.now() - DIAS_PARA_BORRAR * 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'America/Montevideo' });
+const viejas = db.prepare('SELECT id, foto FROM publicaciones WHERE ultima_vez < ?').all(limite);
+for (const v of viejas) {
+  db.prepare('DELETE FROM corrida_publicaciones WHERE publicacion_id = ?').run(v.id);
+  db.prepare('DELETE FROM publicaciones WHERE id = ?').run(v.id);
+}
+db.exec('COMMIT');
+for (const v of viejas) if (v.foto) rmSync(join(DATOS, 'fotos', v.foto), { force: true });
+
+// Descarga las fotos nuevas en paralelo. El artefacto no puede cargar imágenes de otros sitios,
+// así que la foto se guarda en local y el reporte la incrusta. Si falla, `foto` queda en '' y no se reintenta.
 const guardarFoto = db.prepare('UPDATE publicaciones SET foto = ? WHERE id = ?');
-let fotos = 0;
-for (const fila of sinFoto) {
+async function descargar(fila) {
   try {
-    const r = await fetch(fila.imagen_url, { signal: AbortSignal.timeout(15_000) });
-    const tipo = r.headers.get('content-type') ?? '';
-    if (!r.ok || !tipo.startsWith('image/')) continue;
+    const r = await fetch(fila.imagen_url, { signal: AbortSignal.timeout(ESPERA_FOTO_MS) });
+    const tipo = (r.headers.get('content-type') ?? '').split(';')[0].trim();
+    const ext = EXTENSIONES[tipo];
+    if (!r.ok || !ext) throw new Error('sin imagen');
     const bytes = Buffer.from(await r.arrayBuffer());
-    if (bytes.length > MAX_BYTES_FOTO) continue;
-    const ext = tipo.split('/')[1].split(';')[0].replace('jpeg', 'jpg');
+    if (bytes.length > MAX_BYTES_FOTO) throw new Error('muy grande');
     const nombre = `${fila.id}.${ext}`;
     writeFileSync(join(DATOS, 'fotos', nombre), bytes);
     guardarFoto.run(nombre, fila.id);
-    fotos++;
+    return true;
   } catch {
-    // Sin foto: el reporte muestra un recuadro en su lugar.
+    guardarFoto.run('', fila.id);
+    return false;
   }
 }
+let fotos = 0;
+const cola = [...sinFoto];
+await Promise.all(Array.from({ length: DESCARGAS_EN_PARALELO }, async () => {
+  while (cola.length) if (await descargar(cola.shift())) fotos++;
+}));
 
-console.log(JSON.stringify({ corrida: Number(corridaId), fecha, resumen, fotos_descargadas: fotos, errores }, null, 2));
+console.log(JSON.stringify({
+  corrida: Number(corridaId), fecha: dia, resumen, fotos_descargadas: fotos, borradas_por_viejas: viejas.length, errores,
+}, null, 2));

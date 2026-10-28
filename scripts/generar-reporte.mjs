@@ -12,12 +12,7 @@ const db = abrirDb();
 
 const publicaciones = db
   .prepare(`
-    SELECT p.*, max(c.id) AS ultima_corrida,
-      max(CASE WHEN cp.nueva = 1 THEN c.id END) AS corrida_nueva
-    FROM publicaciones p
-    LEFT JOIN corrida_publicaciones cp ON cp.publicacion_id = p.id
-    LEFT JOIN corridas c ON c.id = cp.corrida_id
-    GROUP BY p.id
+    SELECT p.* FROM publicaciones p
     ORDER BY p.primera_vez DESC, coalesce(p.fecha_publicacion, '') DESC, p.id DESC
   `)
   .all();

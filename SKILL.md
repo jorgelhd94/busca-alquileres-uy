@@ -44,6 +44,7 @@ Guarda los criterios confirmados en `criterios.json`, en la misma carpeta que es
   ],
   "tipo": "apartamento",
   "dormitorios_min": 2,
+  "dormitorios_max": null,
   "precio_max": 30000,
   "moneda": "UYU",
   "duracion": "anual",
@@ -52,7 +53,7 @@ Guarda los criterios confirmados en `criterios.json`, en la misma carpeta que es
 }
 ```
 
-`lugar` es la ciudad o barrio, o `null` si busca en todo el departamento. `tipo` es `apartamento`, `casa` o `cualquiera`. `moneda` es `UYU` o `USD`. `duracion` es `anual`, `temporada` o `invernal`.
+`lugar` es la ciudad o barrio, o `null` si busca en todo el departamento. `dormitorios_max` es el tope cuando el usuario da un rango ("1 o 2"), o `null` si no hay tope. `tipo` es `apartamento`, `casa` o `cualquiera`. `moneda` es `UYU` o `USD`. `duracion` es `anual`, `temporada` o `invernal`.
 
 Si el usuario invoca el skill y `criterios.json` ya existe, muéstrale los criterios guardados y pregúntale (con `AskUserQuestion`) si quiere buscar con esos o hacer el quiz de nuevo.
 
@@ -60,16 +61,28 @@ Si el usuario invoca el skill y `criterios.json` ya existe, muéstrale los crite
 
 Busca en estos sitios con el navegador integrado (`mcp__Claude_Browser__*`). Lee las páginas con `get_page_text` o `read_page`, no con capturas. Haz una búsqueda por departamento y sitio.
 
-1. **Mercado Libre Inmuebles:** acepta filtros en la URL: `https://listado.mercadolibre.com.uy/inmuebles/alquiler/<n>-dormitorio(s)/<departamento>/<ciudad>/_PriceRange_0USD-<tope en USD>USD` (por ejemplo `1-dormitorio`, `2-dormitorios`, `monoambiente`; el tope en dólares es `precio_max` / 40 si está en pesos). Trae 48 avisos por página y no ordena por fecha: los recién publicados llevan `recent_publication` en el link, úsalo para `fecha_publicacion`. Si juntas más de 50, elige repartiendo entre zonas. Pide iniciar sesión y a veces muestra un captcha ("Por seguridad, completá este paso"). Si pide sesión, pídele al usuario que la inicie igual que en Facebook. Si aparece un captcha, sigue "Captchas y verificaciones" más abajo.
+**Precio y dormitorios en cada sitio.** Cada sitio filtra en una moneda distinta, así que calcula los dos topes antes de empezar (≈ $U 40 por dólar):
+- **Tope en pesos:** `precio_max` si `moneda` es `UYU`; `precio_max × 40` si es `USD`. Lo usan Gallito, Facebook e InfoCasas.
+- **Tope en dólares:** `precio_max` si `moneda` es `USD`; `precio_max / 40` si es `UYU`. Lo usa Mercado Libre.
+
+"Dormitorios como mínimo" incluye todas las cantidades desde `dormitorios_min` hasta `dormitorios_max` (o sin tope si es `null`), nunca solo la cantidad exacta:
+- **Mercado Libre:** una búsqueda por cada cantidad del rango (`1-dormitorio`, `2-dormitorios`, `3-dormitorios`, `mas-de-4-dormitorios`).
+- **InfoCasas:** elige la cantidad mínima con "Número exacto de dormitorios" desactivado.
+- **Facebook:** `minBedrooms` es el mínimo; pon `maxBedrooms` solo si hay `dormitorios_max`.
+- **Gallito:** filtra solo por precio y descarta tú los que queden fuera del rango.
+
+En todos, descarta después los avisos que queden fuera del rango de dormitorios.
+
+1. **Mercado Libre Inmuebles:** acepta filtros en la URL: `https://listado.mercadolibre.com.uy/inmuebles/alquiler/<n>-dormitorio(s)/<departamento>/<ciudad>/_PriceRange_0USD-<tope en dólares>USD`. Trae 48 avisos por página y no ordena por fecha: los recién publicados llevan `recent_publication` en el link, úsalo para `fecha_publicacion`. Los avisos patrocinados traen un link de rastreo (`click1.mercadolibre.com.uy/...`): usa como `url` el link propio del aviso (`https://<tipo>.mercadolibre.com.uy/MLU-...`) si la tarjeta lo tiene, y si no, salta ese aviso. Pide iniciar sesión y a veces muestra un captcha ("Por seguridad, completá este paso"). Si pide sesión, pídele al usuario que la inicie igual que en Facebook. Si aparece un captcha, sigue "Captchas y verificaciones" más abajo.
 2. **InfoCasas:** entra a `https://www.infocasas.com.uy/alquiler/inmuebles/<departamento>/<ciudad>` (por ejemplo `.../maldonado/punta-del-este`). Las URLs con filtros abiertas directamente devuelven **403**, así que aplica los filtros con la propia página: botón "Precio" → campo "Max $" → "Aplicar rango", y después "Ordenar por" → "Más Recientes". Pasa de página haciendo clic en los links `pagina2`, `pagina3`... (no navegando a la URL). Cada tarjeta muestra precio, dormitorios, zona, título y foto.
-3. **Gallito:** acepta filtros en la URL: `https://www.gallito.com.uy/inmuebles/alquiler/<departamento>/<ciudad>/pre-0-<precio>-pesos/ord_rec` (precio máximo en pesos y más recientes primero); las páginas siguientes agregan `?pag=2`. Lee las tarjetas en la página ya cargada, no con `fetch`, porque el texto sin formato pega el precio con los dormitorios.
+3. **Gallito:** acepta filtros en la URL: `https://www.gallito.com.uy/inmuebles/alquiler/<departamento>/<ciudad>/pre-0-<tope en pesos>-pesos/ord_rec` (más recientes primero); las páginas siguientes agregan `?pag=2`. Lee las tarjetas en la página ya cargada, no con `fetch`, porque el texto sin formato pega el precio con los dormitorios.
 4. **Facebook Marketplace:** ver "Facebook Marketplace" más abajo, porque necesita que el usuario haya iniciado sesión.
 
 **Captchas y verificaciones.** Cuando un sitio muestra un captcha, un "confirma que eres tú" o una verificación de seguridad, **pregúntale siempre al usuario** antes de saltar el sitio: tú nunca lo resuelves, pero el usuario sí puede hacerlo en el panel del navegador. Usa `AskUserQuestion` con opciones como "Ya lo resolví" y "Saltar <sitio> esta vez". Si lo resolvió, recarga la página y sigue; si aparece otra vez en la misma corrida, vuelve a preguntar una sola vez más y, si sigue, salta el sitio. Solo en la tarea programada, donde nadie puede responder, salta el sitio directamente y anótalo en `notas` ("pidió un captcha: resuélvelo en el navegador para incluirlo mañana").
 
 **Precios engañosos.** Muchos avisos de temporada publican el precio por día o por quincena, y algunos ponen "$U 900" cuando son dólares. Descarta los que no tienen sentido como alquiler mensual: en pesos, menos de $U 12.000; en dólares, menos de USD 300. Descarta también los que dicen "por día", "quincena", "check in" o meses de verano sueltos cuando el precio es bajo. Si `precio_max` está en pesos, compáralo con los avisos en dólares usando la cotización que muestre el sitio (InfoCasas la indica en su filtro de precio; ronda $U 40 por dólar).
 
-**Más nuevas primero, hasta 50 por plataforma.** En cada corrida se guardan como máximo 50 publicaciones por plataforma que cumplan los criterios, priorizando las más recientes. Ordena cada sitio por "Más recientes" (o la opción equivalente) cuando la tenga, y deja de recorrer un sitio cuando ya juntaste 50 que cumplen. Anota la fecha de publicación de cada aviso si el sitio la muestra ("Publicado hace 3 días" → calcula la fecha). El script de guardado vuelve a aplicar el tope y el orden, así que si juntas alguna de más no pasa nada.
+**Más nuevas primero, hasta 50 por plataforma.** En cada corrida se guardan como máximo 50 publicaciones por plataforma que cumplan los criterios, priorizando las más recientes. Ordena cada sitio por "Más recientes" (o la opción equivalente) cuando la tenga, y deja de recorrer un sitio cuando ya juntaste 50 que cumplen. Anota la fecha de publicación de cada aviso si el sitio la muestra ("Publicado hace 3 días" → calcula la fecha). El script de guardado vuelve a aplicar el tope y el orden, y reparte los 50 entre zonas, así que si juntas alguno de más no pasa nada.
 
 `<departamento>` va en minúsculas, sin tildes y con guiones (`montevideo`, `cerro-largo`, `paysandu`, `treinta-y-tres`). Las URLs son solo puntos de partida: los sitios cambian su estructura. Si una no carga o no filtra, entra desde la portada del sitio y aplica los filtros con su propio buscador (departamento, ciudad o barrio, tipo, dormitorios, precio, moneda). Lo que el sitio no permita filtrar (mascotas, amueblado, duración) revísalo en el título y la descripción de cada aviso.
 
@@ -101,8 +114,8 @@ Revisa como máximo **100 publicaciones de Facebook por día**, sumando todas la
 Al empezar, léelo: si la fecha no es la de hoy, reinicia `revisadas` a 0. Actualiza el archivo a medida que avanzas, no solo al final, así la cuenta queda bien aunque la búsqueda se corte. Si hay varias zonas, reparte el cupo entre ellas para no gastarlo todo en la primera. Al llegar a 100, deja Facebook por hoy y dilo en el resumen ("Facebook: tope diario de 100 alcanzado").
 
 **Búsqueda**
-1. Usa la categoría de alquileres con los filtros en la URL: `https://www.facebook.com/marketplace/category/propertyrentals?maxPrice=<precio>&minBedrooms=<min>&maxBedrooms=<max>&sortBy=creation_time_descend&exact=false`. La ubicación es la que tenga guardada la cuenta (se ve en el botón "<ciudad> · <km>"); si no es la zona buscada, cámbiala con ese botón.
-2. Facebook usa la moneda local, así que `maxPrice` va en pesos. Los avisos traen "Recién publicado" cuando son de hoy: úsalo como `fecha_publicacion`. Descarta los de otras localidades (el radio suele traer Piriápolis, La Barra o Minas).
+1. Usa la categoría de alquileres con los filtros en la URL: `https://www.facebook.com/marketplace/category/propertyrentals?maxPrice=<tope en pesos>&minBedrooms=<dormitorios_min>&sortBy=creation_time_descend&exact=false`, y agrega `&maxBedrooms=<dormitorios_max>` solo si hay tope. La ubicación es la que tenga guardada la cuenta (se ve en el botón "<ciudad> · <km>"); si no es la zona buscada, cámbiala con ese botón.
+2. Facebook usa la moneda local, así que `maxPrice` va en pesos aunque el criterio esté en dólares. Los avisos traen "Recién publicado" cuando son de hoy: úsalo como `fecha_publicacion`. Descarta los de otras localidades (el radio suele traer Piriápolis, La Barra o Minas).
 3. Muchos avisos de Facebook no indican moneda ni dormitorios en el título. Abre solo los que parezcan cumplir para confirmarlo en la descripción antes de incluirlos.
 
 Si el usuario elige saltar Facebook, sigue con los otros sitios y anótalo en el resumen final.
@@ -152,11 +165,11 @@ Todo lo que cumple los criterios se guarda en la base `datos/alquileres.db` (en 
 node --no-warnings "<carpeta del skill>/scripts/guardar.mjs" "<scratchpad>/corrida.json"
 ```
 
-   El script deja como máximo 50 publicaciones por plataforma, ordenadas por fecha de publicación (más nuevas primero; a igual fecha, las que nunca se vieron). Un aviso que ya estaba en la base se actualiza, no se duplica. Imprime un resumen con, por plataforma, cuántas recibió, guardó, cuántas son nuevas y cuántas quedaron afuera por el tope.
+   El script deja como máximo 50 publicaciones por plataforma, repartidas entre zonas y, dentro de cada zona, ordenadas por fecha de publicación (más nuevas primero; a igual fecha, las que nunca se vieron). Un aviso que ya estaba en la base se actualiza, no se duplica. Un aviso con datos inválidos (URL relativa o que no es `http(s)`, campos con formato raro) se anota en `errores` y el resto se guarda igual. Borra de la base los avisos que no aparecieron en ninguna búsqueda durante 60 días. Imprime un resumen con, por plataforma, cuántas recibió, guardó, cuántas son nuevas en esta búsqueda (`nuevas`), cuántas aparecieron hoy (`nuevas_hoy`) y cuántas quedaron afuera por el tope.
 
 ## 5. Publicar el reporte
 
-El reporte es un buscador HTML con estilo de catálogo de alojamientos: búsqueda por texto, filtros por sitio, zonas (las que aparecen en los datos), precio mínimo y máximo en pesos (los avisos en dólares se comparan a ≈ $U 40), dormitorios, tipo, solo nuevas, amueblado y con foto, orden por más nuevas o por precio, y una grilla con todos los avisos. Al final tiene el historial de búsquedas con las notas de cada corrida. Su URL no cambia nunca, así el usuario puede compartir el link y siempre ve los datos al día.
+El reporte es un buscador HTML con estilo de catálogo de alojamientos: búsqueda por texto, filtros por sitio, zonas (las que aparecen en los datos), precio mínimo y máximo en pesos (los avisos en dólares se comparan a ≈ $U 40), dormitorios, tipo, nuevas de hoy, amueblado y con foto, orden por más nuevas o por precio, y una grilla con todos los avisos. Al final tiene el historial de búsquedas con las notas de cada corrida. Su URL no cambia nunca, así el usuario puede compartir el link y siempre ve los datos al día.
 
 1. Genera el HTML desde la base:
 
@@ -180,7 +193,8 @@ El artefacto es privado hasta que el usuario lo comparte desde su menú "Compart
 
 Cierra con un resumen corto, no con la lista entera de avisos (para eso está el reporte):
 - El link del reporte.
-- Por sitio: cuántos avisos guardó y cuántos son nuevos, según lo que imprimió `guardar.mjs`.
+- Por sitio, según lo que imprimió `guardar.mjs`: cuántos avisos guardó, cuántos son nuevos en esta búsqueda (`nuevas`) y cuántos aparecieron por primera vez hoy (`nuevas_hoy`). El reporte marca como "Nueva" los de hoy, así que con varias búsquedas por día los dos números pueden diferir: dilo así para que no se confundan.
+- Si `errores` no está vacío, cuántos avisos no se pudieron guardar y por qué (en una línea).
 - Los 3 a 5 avisos nuevos más interesantes, con este formato:
 
 ```

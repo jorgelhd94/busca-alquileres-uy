@@ -361,7 +361,7 @@ td small { color: var(--muted); }
   }
   function pintarToggles() {
     const box = document.getElementById('toggles');
-    box.replaceChildren(...[['nuevas', 'Solo nuevas'], ['amueblado', 'Amueblado'], ['foto', 'Con foto']].map(([k, txt]) => {
+    box.replaceChildren(...[['nuevas', 'Nuevas de hoy'], ['amueblado', 'Amueblado'], ['foto', 'Con foto']].map(([k, txt]) => {
       const b = el('button', 'chip', txt);
       b.type = 'button';
       b.setAttribute('aria-pressed', String(f[k]));
@@ -373,7 +373,8 @@ td small { color: var(--muted); }
   // Tarjetas
   function tarjeta(p) {
     const a = el('a', 'card');
-    a.href = p.url;
+    // Solo links http(s): los datos vienen de sitios de terceros y no se confía en ellos.
+    a.href = /^https?:\/\//i.test(p.url || '') ? p.url : '#';
     a.target = '_blank';
     a.rel = 'noopener';
     a.title = p.titulo;
@@ -423,6 +424,13 @@ td small { color: var(--muted); }
     return a;
   }
 
+  // Cada tarjeta se arma una sola vez y se reutiliza al filtrar, así las fotos no se vuelven a decodificar.
+  const tarjetas = new Map();
+  function tarjetaGuardada(p) {
+    if (!tarjetas.has(p.url)) tarjetas.set(p.url, tarjeta(p));
+    return tarjetas.get(p.url);
+  }
+
   function vacio(titulo, texto) {
     const box = el('div', 'empty');
     box.innerHTML = ilustracion({ url: titulo, tipo: 'casa' });
@@ -446,7 +454,7 @@ td small { color: var(--muted); }
         td.append(el('small', null, '(' + (c[k + '_nuevas'] || 0) + ' nuevas)'));
         tr.append(td);
       });
-      tr.append(el('td', null, Object.entries(c.notas || {}).filter(([, v]) => v).map(([k, v]) => NOMBRE[k] + ': ' + v).join(' · ')));
+      tr.append(el('td', null, Object.entries(c.notas || {}).filter(([, v]) => v).map(([k, v]) => (NOMBRE[k] || k) + ': ' + v).join(' · ')));
       t.append(tr);
     });
     wrap.append(t);
@@ -468,7 +476,9 @@ td small { color: var(--muted); }
     const total = document.getElementById('total');
     total.textContent = lista.length + (lista.length === 1 ? ' aviso' : ' avisos');
     if (lista.length !== PUBS.length) total.append(el('small', null, 'de ' + PUBS.length));
-    document.getElementById('limpiar').hidden = JSON.stringify(f) === JSON.stringify(INICIAL);
+    // El orden no cuenta como filtro: cambiarlo no muestra "Limpiar filtros".
+    const sinOrden = (o) => JSON.stringify({ ...o, orden: null });
+    document.getElementById('limpiar').hidden = sinOrden(f) === sinOrden(INICIAL);
     const activos = f.zonas.length + (f.pmin !== '') + (f.pmax !== '') + (f.dorm !== 'todos') + (f.tipo !== 'todos') + f.nuevas + f.amueblado + f.foto;
     document.getElementById('nf').textContent = activos ? '(' + activos + ')' : '';
 
@@ -478,7 +488,7 @@ td small { color: var(--muted); }
         'Aparecen acá después de la primera búsqueda con /busca-alquileres-uy. Esta página se actualiza en cada búsqueda y su link no cambia.'));
       return;
     }
-    grid.replaceChildren(...lista.map(tarjeta));
+    grid.replaceChildren(...lista.map(tarjetaGuardada));
     const extra = [];
     if (!lista.length) {
       const fav = f.sitio === 'favoritas';
@@ -497,16 +507,19 @@ td small { color: var(--muted); }
 
   const q = document.getElementById('q');
   q.value = f.q;
-  q.addEventListener('input', () => { f.q = q.value; actualizar(); });
+  // Al escribir se espera una pausa corta antes de filtrar, para no rehacer la grilla en cada tecla.
+  let espera;
+  const luego = () => { clearTimeout(espera); espera = setTimeout(actualizar, 180); };
+  q.addEventListener('input', () => { f.q = q.value; luego(); });
   const pmin = document.getElementById('pmin');
   const pmax = document.getElementById('pmax');
   pmin.value = f.pmin;
   pmax.value = f.pmax;
-  pmin.addEventListener('input', () => { f.pmin = pmin.value; actualizar(); });
-  pmax.addEventListener('input', () => { f.pmax = pmax.value; actualizar(); });
+  pmin.addEventListener('input', () => { f.pmin = pmin.value; luego(); });
+  pmax.addEventListener('input', () => { f.pmax = pmax.value; luego(); });
   document.getElementById('orden').addEventListener('change', (e) => { f.orden = e.target.value; actualizar(); });
   document.getElementById('limpiar').addEventListener('click', () => {
-    Object.assign(f, INICIAL, { zonas: [] });
+    Object.assign(f, INICIAL, { zonas: [], orden: f.orden });
     q.value = pmin.value = pmax.value = '';
     actualizar();
   });

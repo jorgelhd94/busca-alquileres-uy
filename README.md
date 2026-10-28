@@ -4,7 +4,7 @@ Skill de Claude que busca alquileres en Uruguay en Mercado Libre, InfoCasas, Gal
 
 ![Buscador con datos de ejemplo](docs/captura.png)
 
-**Requisitos:** app de escritorio de Claude y Node.js 22.5 o más nuevo.
+**Requisitos:** app de escritorio de Claude y Node.js 22.13 o más nuevo.
 
 **Instalación:** copia esta carpeta en `~/.claude/skills/`.
 
