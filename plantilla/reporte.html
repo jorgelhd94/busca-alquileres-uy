@@ -1,0 +1,480 @@
+<title>Busca Alquileres UY</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: buscador directo. Cabecera con búsqueda, barra fija de filtros (sitio, zonas, precio, dormitorios, tipo, orden) y grilla con todos los avisos. Apariencia clara única, como un catálogo de alojamientos. */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --haze: #f7f7f7;
+  --ink: #222222;
+  --muted: #6a6a6a;
+  --line: #e3e3e3;
+  --accent: #1a6fd8;
+  --accent-deep: #1257b0;
+  --accent-soft: #eaf2fd;
+  --sun: #f4b400;
+  --font: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius: 18px;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: inherit; text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 8px; }
+.wrap {
+  max-width: 1760px; margin: 0 auto;
+  padding-left: max(32px, env(safe-area-inset-left, 0px));
+  padding-right: max(32px, env(safe-area-inset-right, 0px));
+}
+
+/* Cabecera */
+.top .wrap { display: flex; align-items: center; gap: 24px; padding-block: 16px; }
+.brand { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 800; font-size: 21px; letter-spacing: -0.03em; white-space: nowrap; flex: none; }
+.brand svg { width: 34px; height: 34px; }
+.search {
+  flex: 1; max-width: 640px; margin-inline: auto; display: flex; align-items: center; gap: 8px;
+  height: 56px; border: 1px solid #dddddd; border-radius: 999px; padding: 0 8px 0 24px; box-shadow: 0 3px 12px rgba(0,0,0,.07);
+}
+.search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font-size: 15px; }
+.search input::placeholder { color: var(--muted); }
+.search .go { width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; display: grid; place-items: center; flex: none; }
+.search .go svg { width: 16px; height: 16px; }
+.stamp { font-size: 13px; color: var(--muted); white-space: nowrap; text-align: right; flex: none; }
+.stamp b { display: block; color: var(--ink); font-weight: 600; font-size: 14px; }
+
+/* Barra de filtros */
+.filters { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-block: 1px solid var(--line); }
+.filters .wrap { display: grid; gap: 12px; padding-block: 12px; }
+.line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.scroll { overflow-x: auto; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.tabs { gap: 30px; }
+.tab {
+  display: flex; align-items: center; gap: 9px; padding: 4px 2px 10px; border: 0; background: none; cursor: pointer;
+  color: var(--muted); font-weight: 500; white-space: nowrap; border-bottom: 2px solid transparent; flex: none;
+}
+.tab .ico { width: 28px; height: 28px; flex: none; }
+.tab small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tab:hover { color: var(--ink); }
+.tab[aria-pressed="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.label { font-size: 12.5px; font-weight: 700; color: var(--muted); white-space: nowrap; flex: none; }
+.chip {
+  flex: none; height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg);
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; font-size: 14px;
+}
+.chip small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip:hover { border-color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.chip[aria-pressed="true"] small { color: rgba(255,255,255,.7); }
+.controls { flex-wrap: wrap; gap: 10px 18px; }
+.group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { border: 0; background: var(--bg); height: 34px; padding: 0 12px; cursor: pointer; font-size: 14px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.price { display: flex; align-items: center; gap: 6px; }
+.price input {
+  width: 108px; height: 36px; border: 1px solid var(--line); border-radius: 999px; padding: 0 12px; font-size: 14px;
+  font-variant-numeric: tabular-nums; background: var(--bg);
+}
+.sort { height: 36px; border: 1px solid var(--line); border-radius: 999px; padding: 0 12px; background: var(--bg); font-size: 14px; cursor: pointer; }
+.summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.summary h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.summary h1 small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.clear { border: 0; background: none; text-decoration: underline; font-weight: 600; cursor: pointer; padding: 4px 0; }
+
+/* Grilla */
+main .wrap { padding-block: 24px 64px; display: grid; gap: 28px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 28px 18px; }
+.card { display: grid; gap: 10px; min-width: 0; align-content: start; }
+.photo { position: relative; aspect-ratio: 1 / 0.95; border-radius: var(--radius); overflow: hidden; }
+.photo img, .photo .art { width: 100%; height: 100%; display: block; object-fit: cover; }
+.card:hover .photo img { filter: brightness(.96); }
+.badge {
+  position: absolute; top: 14px; left: 14px; max-width: calc(100% - 70px);
+  background: rgba(255,255,255,.96); font-size: 13px; font-weight: 600; line-height: 1.15;
+  padding: 7px 12px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0,0,0,.14); display: flex; align-items: center; gap: 7px;
+}
+.badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--sun); flex: none; }
+.fav { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border: 0; background: none; cursor: pointer; padding: 0; }
+.fav svg { width: 100%; height: 100%; fill: rgba(0,0,0,.5); stroke: #fff; stroke-width: 2.2; }
+.fav[aria-pressed="true"] svg { fill: var(--accent); }
+.meta { display: grid; gap: 2px; padding-inline: 2px; min-width: 0; }
+.meta h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta p { margin: 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta .pr { color: var(--ink); }
+.meta .pr b { font-weight: 700; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent-deep); background: var(--accent-soft); border-radius: 6px; padding: 1px 7px; margin-right: 4px; }
+
+.empty { display: grid; justify-items: center; text-align: center; gap: 12px; padding: 56px 0 24px; }
+.empty .art { width: min(300px, 76vw); border-radius: var(--radius); }
+.empty h2 { margin: 6px 0 0; font-size: 22px; font-weight: 700; }
+.empty p { margin: 0; max-width: 52ch; color: var(--muted); }
+details.hist { border-top: 1px solid var(--line); padding-top: 24px; }
+details.hist summary { cursor: pointer; font-size: 17px; font-weight: 600; }
+.tablewrap { overflow-x: auto; margin-top: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 11px 16px 11px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+td small { color: var(--muted); }
+
+@media (max-width: 900px) {
+  .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .top .wrap { flex-wrap: wrap; gap: 12px; }
+  .search { order: 3; flex-basis: 100%; max-width: none; height: 50px; }
+  .stamp { margin-left: auto; }
+  .filters { position: static; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 22px 12px; }
+  .price input { width: 92px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 15.5 16 5l11.5 10.5"/><path d="M8 13.2V27h16V13.2"/><circle cx="16" cy="19.5" r="3.4"/></svg>
+      busca alquileres
+    </a>
+    <label class="search" for="q">
+      <input id="q" type="search" placeholder="Busca por barrio, calle, edificio o palabra" autocomplete="off">
+      <span class="go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/></svg></span>
+    </label>
+    <div class="stamp" id="stamp"></div>
+  </div>
+</header>
+
+<section class="filters" aria-label="Filtros">
+  <div class="wrap">
+    <div class="line scroll tabs" id="sitios"></div>
+    <div class="line scroll" id="zonas"></div>
+    <div class="line controls">
+      <div class="group price">
+        <span class="label">Precio $U</span>
+        <input id="pmin" type="number" inputmode="numeric" min="0" step="1000" placeholder="Mínimo" aria-label="Precio mínimo en pesos">
+        <span aria-hidden="true">–</span>
+        <input id="pmax" type="number" inputmode="numeric" min="0" step="1000" placeholder="Máximo" aria-label="Precio máximo en pesos">
+      </div>
+      <div class="group"><span class="label">Dorm.</span><div class="seg" id="dorm"></div></div>
+      <div class="group"><span class="label">Tipo</span><div class="seg" id="tipo"></div></div>
+      <div class="group" id="toggles"></div>
+      <div class="group">
+        <label class="label" for="orden">Ordenar</label>
+        <select class="sort" id="orden">
+          <option value="nuevas">Más nuevas</option>
+          <option value="precio-asc">Menor precio</option>
+          <option value="precio-desc">Mayor precio</option>
+          <option value="dorm-desc">Más dormitorios</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main>
+  <div class="wrap">
+    <div class="summary">
+      <h1 id="total"></h1>
+      <button class="clear" type="button" id="limpiar">Limpiar filtros</button>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div id="extra"></div>
+  </div>
+</main>
+
+<script id="datos" type="application/json">__DATOS__</script>
+<script>
+(function () {
+  const DATOS = JSON.parse(document.getElementById('datos').textContent);
+  const PUBS = DATOS.publicaciones || [];
+  const CORRIDAS = DATOS.corridas || [];
+  const ULTIMA = CORRIDAS[0] || null;
+  // Cotización aproximada para comparar avisos en dólares con el filtro en pesos.
+  const PESOS_POR_DOLAR = 40;
+
+  const ICONOS = {
+    todas: '<rect x="6" y="18" width="36" height="24" rx="3" fill="#f6d9a8"/><path d="M3 20 24 5l21 15" fill="#e2704d"/><rect x="19" y="27" width="10" height="15" rx="1.5" fill="#7a5236"/><rect x="10" y="24" width="7" height="7" rx="1" fill="#8fc3ee"/><rect x="31" y="24" width="7" height="7" rx="1" fill="#8fc3ee"/>',
+    mercadolibre: '<rect x="5" y="14" width="38" height="28" rx="5" fill="#ffe27a"/><path d="M15 14v-3a9 9 0 0 1 18 0v3" fill="none" stroke="#c99a00" stroke-width="3"/><path d="M14 27c3 3 6 3 10 0s7-3 10 0" fill="none" stroke="#2d3a8c" stroke-width="3" stroke-linecap="round"/>',
+    infocasas: '<rect x="4" y="16" width="20" height="26" rx="2" fill="#7fb2ea"/><rect x="24" y="8" width="20" height="34" rx="2" fill="#3f7fd0"/><g fill="#e9f3ff"><rect x="8" y="21" width="4" height="4"/><rect x="16" y="21" width="4" height="4"/><rect x="8" y="30" width="4" height="4"/><rect x="16" y="30" width="4" height="4"/><rect x="28" y="13" width="4" height="4"/><rect x="36" y="13" width="4" height="4"/><rect x="28" y="22" width="4" height="4"/><rect x="36" y="22" width="4" height="4"/><rect x="28" y="31" width="4" height="4"/><rect x="36" y="31" width="4" height="4"/></g>',
+    gallito: '<rect x="8" y="5" width="32" height="38" rx="3" fill="#f1f1f1" stroke="#cfcfcf" stroke-width="2"/><rect x="13" y="11" width="22" height="9" rx="1.5" fill="#e45b4c"/><g stroke="#9a9a9a" stroke-width="2.4" stroke-linecap="round"><path d="M13 26h22M13 31h22M13 36h14"/></g>',
+    facebook: '<circle cx="24" cy="24" r="19" fill="#4f86e8"/><circle cx="24" cy="19" r="6.5" fill="#e8f0ff"/><path d="M12 37c2.5-6 7-9 12-9s9.5 3 12 9" fill="#e8f0ff"/>',
+    favoritas: '<path d="M24 42S6 31.5 6 18.5A9.5 9.5 0 0 1 24 13a9.5 9.5 0 0 1 18 5.5C42 31.5 24 42 24 42z" fill="#f2668b"/>',
+  };
+  const SITIOS = [
+    { id: 'todas', nombre: 'Todos' },
+    { id: 'mercadolibre', nombre: 'Mercado Libre' },
+    { id: 'infocasas', nombre: 'InfoCasas' },
+    { id: 'gallito', nombre: 'Gallito' },
+    { id: 'facebook', nombre: 'Facebook' },
+    { id: 'favoritas', nombre: 'Guardadas' },
+  ];
+  const NOMBRE = Object.fromEntries(SITIOS.map((s) => [s.id, s.nombre]));
+  const TIPO = { apartamento: 'Apartamento', casa: 'Casa' };
+
+  const leer = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+  const escribir = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const favoritas = new Set(leer('favoritas', []));
+  const INICIAL = { sitio: 'todas', zonas: [], q: '', pmin: '', pmax: '', dorm: 'todos', tipo: 'todos', nuevas: false, amueblado: false, foto: false, orden: 'nuevas' };
+  const f = Object.assign({}, INICIAL, leer('filtros', {}));
+  f.zonas = Array.isArray(f.zonas) ? f.zonas : [];
+
+  const numero = new Intl.NumberFormat('es-UY', { maximumFractionDigits: 0 });
+  const fechaCorta = (iso) => iso ? new Date(iso.slice(0, 10) + 'T12:00:00').toLocaleDateString('es-UY', { day: 'numeric', month: 'short' }).replace('.', '') : '';
+  const precioTxt = (p) => p.precio == null ? 'Precio a consultar' : (p.moneda === 'USD' ? 'USD ' : '$U ') + numero.format(p.precio);
+  const enPesos = (p) => p.precio == null ? null : p.moneda === 'USD' ? p.precio * PESOS_POR_DOLAR : p.precio;
+  const zonaDe = (p) => p.zona || p.departamento || 'Otras zonas';
+  const esNueva = (p) => Boolean(ULTIMA) && p.primera_vez === ULTIMA.fecha;
+  const esAmueblado = (p) => (p.extras || []).some((e) => /amuebl|amobl/i.test(e));
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+  const CIELOS = [['#cfe6fb', '#f7fbff'], ['#fde4c8', '#fff8ef'], ['#d9f0e3', '#f5fcf8'], ['#e6defa', '#faf8ff'], ['#fbd9d9', '#fff6f6']];
+  function ilustracion(p) {
+    const n = Math.abs([...String(p.url || p.id)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7));
+    const [c1, c2] = CIELOS[n % CIELOS.length];
+    const id = 'g' + n;
+    const fig = p.tipo === 'casa'
+      ? '<rect x="70" y="112" width="160" height="96" rx="6" fill="#ffffff"/><path d="M58 118 150 52l92 66" fill="#2f3b4c"/><rect x="132" y="150" width="36" height="58" rx="4" fill="#c98a5b"/><rect x="88" y="136" width="30" height="28" rx="3" fill="#9fd0f5"/><rect x="182" y="136" width="30" height="28" rx="3" fill="#9fd0f5"/>'
+      : '<rect x="92" y="58" width="116" height="150" rx="6" fill="#ffffff"/><rect x="92" y="58" width="116" height="16" rx="6" fill="#2f3b4c"/>' +
+        [0, 1, 2, 3].map((r) => [0, 1, 2].map((c) => `<rect x="${108 + c * 32}" y="${86 + r * 28}" width="20" height="16" rx="2" fill="#9fd0f5"/>`).join('')).join('') +
+        '<rect x="136" y="186" width="28" height="22" rx="2" fill="#c98a5b"/>';
+    return `<svg class="art" viewBox="0 0 300 285" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="300" height="285" fill="url(#${id})"/><circle cx="258" cy="102" r="15" fill="#ffd45c"/><ellipse cx="150" cy="226" rx="190" ry="40" fill="#bfe3b4"/>${fig}</svg>`;
+  }
+
+  // Cabecera
+  const stamp = document.getElementById('stamp');
+  if (ULTIMA) {
+    stamp.append(el('b', null, 'Actualizado ' + fechaCorta(ULTIMA.creada)));
+    stamp.append(document.createTextNode('a las ' + ULTIMA.creada.slice(11, 16)));
+  } else {
+    stamp.append(document.createTextNode('Sin búsquedas todavía'));
+  }
+
+  // Filtrado
+  function pasa(p, ignorar) {
+    if (ignorar !== 'sitio') {
+      if (f.sitio === 'favoritas' && !favoritas.has(p.url)) return false;
+      if (f.sitio !== 'todas' && f.sitio !== 'favoritas' && p.plataforma !== f.sitio) return false;
+    }
+    if (ignorar !== 'zonas' && f.zonas.length && !f.zonas.includes(zonaDe(p))) return false;
+    const pp = enPesos(p);
+    if (f.pmin !== '' && (pp == null || pp < +f.pmin)) return false;
+    if (f.pmax !== '' && (pp == null || pp > +f.pmax)) return false;
+    if (f.dorm !== 'todos') {
+      const d = p.dormitorios;
+      if (d == null) return false;
+      if (f.dorm === '3' ? d < 3 : d !== +f.dorm) return false;
+    }
+    if (f.tipo !== 'todos' && p.tipo !== f.tipo) return false;
+    if (f.nuevas && !esNueva(p)) return false;
+    if (f.amueblado && !esAmueblado(p)) return false;
+    if (f.foto && !p.foto) return false;
+    const q = f.q.trim().toLowerCase();
+    if (q && ![p.titulo, p.zona, p.departamento, p.descripcion, (p.extras || []).join(' '), NOMBRE[p.plataforma]]
+      .filter(Boolean).join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  }
+  const ORDEN = {
+    'nuevas': (a, b) => (b.primera_vez || '').localeCompare(a.primera_vez || '') || (b.fecha_publicacion || '').localeCompare(a.fecha_publicacion || '') || b.id - a.id,
+    'precio-asc': (a, b) => (enPesos(a) ?? Infinity) - (enPesos(b) ?? Infinity),
+    'precio-desc': (a, b) => (enPesos(b) ?? -Infinity) - (enPesos(a) ?? -Infinity),
+    'dorm-desc': (a, b) => (b.dormitorios ?? -1) - (a.dormitorios ?? -1) || (enPesos(a) ?? Infinity) - (enPesos(b) ?? Infinity),
+  };
+
+  // Controles
+  const sitiosBox = document.getElementById('sitios');
+  const zonasBox = document.getElementById('zonas');
+  function pintarSitios() {
+    sitiosBox.replaceChildren(...SITIOS.map((s) => {
+      const b = el('button', 'tab');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(s.id === f.sitio));
+      const n = PUBS.filter((p) => s.id === 'todas' ? true : s.id === 'favoritas' ? favoritas.has(p.url) : p.plataforma === s.id).filter((p) => pasa(p, 'sitio')).length;
+      b.innerHTML = `<svg class="ico" viewBox="0 0 48 48" aria-hidden="true">${ICONOS[s.id]}</svg>`;
+      b.append(el('span', null, s.nombre), el('small', null, String(n)));
+      b.addEventListener('click', () => { f.sitio = s.id; actualizar(); });
+      return b;
+    }));
+  }
+  function pintarZonas() {
+    const cuenta = new Map();
+    PUBS.filter((p) => pasa(p, 'zonas')).forEach((p) => cuenta.set(zonaDe(p), (cuenta.get(zonaDe(p)) || 0) + 1));
+    f.zonas.forEach((z) => { if (!cuenta.has(z)) cuenta.set(z, 0); });
+    const todas = el('button', 'chip', 'Todas las zonas');
+    todas.type = 'button';
+    todas.setAttribute('aria-pressed', String(!f.zonas.length));
+    todas.addEventListener('click', () => { f.zonas = []; actualizar(); });
+    const chips = [...cuenta.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([z, n]) => {
+      const b = el('button', 'chip', z);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(f.zonas.includes(z)));
+      b.append(el('small', null, String(n)));
+      b.addEventListener('click', () => {
+        f.zonas = f.zonas.includes(z) ? f.zonas.filter((x) => x !== z) : [...f.zonas, z];
+        actualizar();
+      });
+      return b;
+    });
+    zonasBox.replaceChildren(el('span', 'label', 'Zonas'), todas, ...chips);
+  }
+  function segmento(id, clave, opciones) {
+    const box = document.getElementById(id);
+    box.replaceChildren(...opciones.map(([v, txt]) => {
+      const b = el('button', null, txt);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(f[clave] === v));
+      b.addEventListener('click', () => { f[clave] = v; actualizar(); });
+      return b;
+    }));
+  }
+  function pintarToggles() {
+    const box = document.getElementById('toggles');
+    box.replaceChildren(...[['nuevas', 'Solo nuevas'], ['amueblado', 'Amueblado'], ['foto', 'Con foto']].map(([k, txt]) => {
+      const b = el('button', 'chip', txt);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(f[k]));
+      b.addEventListener('click', () => { f[k] = !f[k]; actualizar(); });
+      return b;
+    }));
+  }
+
+  // Tarjetas
+  function tarjeta(p) {
+    const a = el('a', 'card');
+    a.href = p.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.title = p.titulo;
+    const foto = el('div', 'photo');
+    if (p.foto) {
+      const img = el('img');
+      img.src = p.foto;
+      img.alt = p.titulo;
+      img.loading = 'lazy';
+      foto.append(img);
+    } else {
+      foto.innerHTML = ilustracion(p);
+    }
+    const nueva = esNueva(p);
+    const badge = el('span', 'badge');
+    if (nueva) badge.append(el('i'));
+    badge.append(document.createTextNode(nueva ? 'Nueva' : NOMBRE[p.plataforma]));
+    foto.append(badge);
+    const fav = el('button', 'fav');
+    fav.type = 'button';
+    fav.setAttribute('aria-label', 'Guardar aviso');
+    fav.setAttribute('aria-pressed', String(favoritas.has(p.url)));
+    fav.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 28s-11-6.6-11-15a6 6 0 0 1 11-3.4A6 6 0 0 1 27 13c0 8.4-11 15-11 15z"/></svg>';
+    fav.addEventListener('click', (e) => {
+      e.preventDefault();
+      favoritas.has(p.url) ? favoritas.delete(p.url) : favoritas.add(p.url);
+      escribir('favoritas', [...favoritas]);
+      fav.setAttribute('aria-pressed', String(favoritas.has(p.url)));
+      pintarSitios();
+      if (f.sitio === 'favoritas') actualizar();
+    });
+    foto.append(fav);
+
+    const meta = el('div', 'meta');
+    meta.append(el('h3', null, (TIPO[p.tipo] || 'Propiedad') + ' en ' + zonaDe(p)));
+    const pr = el('p', 'pr');
+    pr.append(el('b', null, precioTxt(p)));
+    if (p.precio != null) pr.append(document.createTextNode(' por mes'));
+    if (p.dormitorios != null) pr.append(document.createTextNode(' · ' + (p.dormitorios === 0 ? 'monoambiente' : p.dormitorios + ' dorm.')));
+    meta.append(pr);
+    const linea = el('p');
+    if (esAmueblado(p)) linea.append(el('span', 'tag', 'Amueblado'));
+    linea.append(document.createTextNode([nueva ? NOMBRE[p.plataforma] : null,
+      p.fecha_publicacion ? 'publicado ' + fechaCorta(p.fecha_publicacion) : 'visto ' + fechaCorta(p.primera_vez)].filter(Boolean).join(' · ')));
+    meta.append(linea);
+    a.append(foto, meta);
+    return a;
+  }
+
+  function vacio(titulo, texto) {
+    const box = el('div', 'empty');
+    box.innerHTML = ilustracion({ url: titulo, tipo: 'casa' });
+    box.append(el('h2', null, titulo), el('p', null, texto));
+    return box;
+  }
+
+  function historial() {
+    const d = el('details', 'hist');
+    d.append(el('summary', null, 'Historial de búsquedas'));
+    const wrap = el('div', 'tablewrap');
+    const t = el('table');
+    const cab = el('tr');
+    ['Fecha', 'Mercado Libre', 'InfoCasas', 'Gallito', 'Facebook', 'Notas'].forEach((c) => cab.append(el('th', null, c)));
+    t.append(cab);
+    CORRIDAS.forEach((c) => {
+      const tr = el('tr');
+      tr.append(el('td', null, fechaCorta(c.creada) + ', ' + c.creada.slice(11, 16)));
+      ['mercadolibre', 'infocasas', 'gallito', 'facebook'].forEach((k) => {
+        const td = el('td', null, String(c[k] || 0) + ' ');
+        td.append(el('small', null, '(' + (c[k + '_nuevas'] || 0) + ' nuevas)'));
+        tr.append(td);
+      });
+      tr.append(el('td', null, Object.entries(c.notas || {}).filter(([, v]) => v).map(([k, v]) => NOMBRE[k] + ': ' + v).join(' · ')));
+      t.append(tr);
+    });
+    wrap.append(t);
+    d.append(wrap);
+    return d;
+  }
+
+  const grid = document.getElementById('grid');
+  function actualizar() {
+    escribir('filtros', f);
+    pintarSitios();
+    pintarZonas();
+    segmento('dorm', 'dorm', [['todos', 'Todos'], ['0', 'Mono'], ['1', '1'], ['2', '2'], ['3', '3+']]);
+    segmento('tipo', 'tipo', [['todos', 'Todos'], ['apartamento', 'Apartamento'], ['casa', 'Casa']]);
+    pintarToggles();
+    document.getElementById('orden').value = f.orden;
+
+    const lista = PUBS.filter((p) => pasa(p)).sort(ORDEN[f.orden] || ORDEN.nuevas);
+    const total = document.getElementById('total');
+    total.textContent = lista.length + (lista.length === 1 ? ' aviso' : ' avisos');
+    if (lista.length !== PUBS.length) total.append(el('small', null, 'de ' + PUBS.length));
+    document.getElementById('limpiar').hidden = JSON.stringify(f) === JSON.stringify(INICIAL);
+
+    if (!PUBS.length) {
+      grid.replaceChildren();
+      document.getElementById('extra').replaceChildren(vacio('Todavía no hay avisos',
+        'Aparecen acá después de la primera búsqueda con /busca-alquileres-uy. Esta página se actualiza en cada búsqueda y su link no cambia.'));
+      return;
+    }
+    grid.replaceChildren(...lista.map(tarjeta));
+    const extra = [];
+    if (!lista.length) {
+      const fav = f.sitio === 'favoritas';
+      extra.push(vacio(fav ? 'Todavía no guardaste avisos' : 'Ningún aviso coincide',
+        fav ? 'Toca el corazón de un aviso para guardarlo acá. Solo lo ves tú, en este navegador.' : 'Prueba con otro precio, otra zona o limpia los filtros.'));
+    }
+    if (CORRIDAS.length) extra.push(historial());
+    document.getElementById('extra').replaceChildren(...extra);
+  }
+
+  const q = document.getElementById('q');
+  q.value = f.q;
+  q.addEventListener('input', () => { f.q = q.value; actualizar(); });
+  const pmin = document.getElementById('pmin');
+  const pmax = document.getElementById('pmax');
+  pmin.value = f.pmin;
+  pmax.value = f.pmax;
+  pmin.addEventListener('input', () => { f.pmin = pmin.value; actualizar(); });
+  pmax.addEventListener('input', () => { f.pmax = pmax.value; actualizar(); });
+  document.getElementById('orden').addEventListener('change', (e) => { f.orden = e.target.value; actualizar(); });
+  document.getElementById('limpiar').addEventListener('click', () => {
+    Object.assign(f, INICIAL, { zonas: [] });
+    q.value = pmin.value = pmax.value = '';
+    actualizar();
+  });
+
+  if (!SITIOS.some((s) => s.id === f.sitio)) f.sitio = 'todas';
+  actualizar();
+})();
+</script>
