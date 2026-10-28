@@ -150,6 +150,7 @@ Todo lo que cumple los criterios se guarda en la base `datos/alquileres.db` (en 
       "extras": ["garaje"],
       "descripcion": "Resumen de una o dos líneas",
       "fecha_publicacion": "AAAA-MM-DD",
+      "duracion": ["anual"],
       "imagen_url": "https://... (la foto principal del aviso)"
     }
   ]
@@ -159,6 +160,7 @@ Todo lo que cumple los criterios se guarda en la base `datos/alquileres.db` (en 
    - `plataforma` es `mercadolibre`, `infocasas`, `gallito` o `facebook`.
    - Usa `null` en lo que no sepas, salvo `url` y `titulo`, que son obligatorios.
    - `notas` es para lo que el usuario debe saber de cada sitio en esta corrida (tope alcanzado, verificación de Facebook, sitio caído). Déjalo vacío si no hubo problemas.
+   - `duracion`: lista con `anual`, `temporada` y/o `invernal`, según lo que diga el aviso (un aviso puede ser de varias). Si no lo sabes, omítela: el script la deduce del título, la descripción y la URL, y si tampoco la encuentra el aviso queda como "Sin dato" en el filtro del reporte.
    - `imagen_url`: toma la URL de la foto principal que aparece en la página (el `src` de la imagen del aviso). El artefacto no puede cargar imágenes de otros sitios, así que el script la descarga y el reporte la incrusta.
 
 2. Guarda la corrida:

@@ -72,8 +72,9 @@ button, input, select { font: inherit; color: inherit; }
 .chip[aria-pressed="true"] small { color: rgba(255,255,255,.7); }
 .controls { flex-wrap: wrap; gap: 10px 18px; }
 .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
-.seg button { border: 0; background: var(--bg); height: 34px; padding: 0 12px; cursor: pointer; font-size: 14px; }
+.seg { display: inline-flex; max-width: 100%; border: 1px solid var(--line); border-radius: 999px; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+.seg button { flex: none; white-space: nowrap; border: 0; background: var(--bg); height: 34px; padding: 0 12px; cursor: pointer; font-size: 14px; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .price { display: flex; align-items: center; gap: 6px; }
@@ -123,6 +124,7 @@ th { font-size: 13px; color: var(--muted); font-weight: 600; }
 td small { color: var(--muted); }
 
 .panel { display: grid; gap: 12px; min-width: 0; }
+.filters .wrap > *, .panel > * { min-width: 0; }
 .abrir { display: none; justify-self: start; }
 .abrir svg { width: 16px; height: 16px; }
 .clear[hidden] + .label { margin-left: 0; }
@@ -142,8 +144,11 @@ td small { color: var(--muted); }
   .abrir { display: inline-flex; }
   .panel { display: none; }
   .filters.open .panel { display: grid; }
-  .controls { flex-direction: column; align-items: stretch; gap: 12px; }
+  .controls { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 12px; }
   .group { justify-content: space-between; }
+  .controls .group { flex-wrap: nowrap; min-width: 0; }
+  .controls .seg { min-width: 0; flex: 0 1 auto; }
+  #toggles { flex-wrap: wrap; justify-content: flex-start; }
   .price input { width: auto; flex: 1; min-width: 0; }
   .summary h1 { font-size: 19px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 26px 16px; }
@@ -189,6 +194,7 @@ td small { color: var(--muted); }
       </div>
       <div class="group"><span class="label">Dorm.</span><div class="seg" id="dorm"></div></div>
       <div class="group"><span class="label">Tipo</span><div class="seg" id="tipo"></div></div>
+      <div class="group"><span class="label">Duración</span><div class="seg" id="duracion"></div></div>
       <div class="group" id="toggles"></div>
     </div>
     </div>
@@ -243,11 +249,13 @@ td small { color: var(--muted); }
   ];
   const NOMBRE = Object.fromEntries(SITIOS.map((s) => [s.id, s.nombre]));
   const TIPO = { apartamento: 'Apartamento', casa: 'Casa' };
+  const DURACION = { anual: 'Anual', temporada: 'Temporada', invernal: 'Invernal' };
+  const duracionesDe = (p) => (p.duracion || '').split(',').filter((d) => DURACION[d]);
 
   const leer = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
   const escribir = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
   const favoritas = new Set(leer('favoritas', []));
-  const INICIAL = { sitio: 'todas', zonas: [], q: '', pmin: '', pmax: '', dorm: 'todos', tipo: 'todos', nuevas: false, amueblado: false, foto: false, orden: 'nuevas' };
+  const INICIAL = { sitio: 'todas', zonas: [], q: '', pmin: '', pmax: '', dorm: 'todos', tipo: 'todos', duracion: 'todas', nuevas: false, amueblado: false, foto: false, orden: 'nuevas' };
   const f = Object.assign({}, INICIAL, leer('filtros', {}));
   f.zonas = Array.isArray(f.zonas) ? f.zonas : [];
 
@@ -298,6 +306,10 @@ td small { color: var(--muted); }
       if (f.dorm === '3' ? d < 3 : d !== +f.dorm) return false;
     }
     if (f.tipo !== 'todos' && p.tipo !== f.tipo) return false;
+    if (f.duracion !== 'todas') {
+      const ds = duracionesDe(p);
+      if (f.duracion === 'sin' ? ds.length : !ds.includes(f.duracion)) return false;
+    }
     if (f.nuevas && !esNueva(p)) return false;
     if (f.amueblado && !esAmueblado(p)) return false;
     if (f.foto && !p.foto) return false;
@@ -416,6 +428,7 @@ td small { color: var(--muted); }
     if (p.dormitorios != null) pr.append(document.createTextNode(' · ' + (p.dormitorios === 0 ? 'monoambiente' : p.dormitorios + ' dorm.')));
     meta.append(pr);
     const linea = el('p');
+    duracionesDe(p).forEach((d) => linea.append(el('span', 'tag', DURACION[d])));
     if (esAmueblado(p)) linea.append(el('span', 'tag', 'Amueblado'));
     linea.append(document.createTextNode([nueva ? NOMBRE[p.plataforma] : null,
       p.fecha_publicacion ? 'publicado ' + fechaCorta(p.fecha_publicacion) : 'visto ' + fechaCorta(p.primera_vez)].filter(Boolean).join(' · ')));
@@ -469,6 +482,7 @@ td small { color: var(--muted); }
     pintarZonas();
     segmento('dorm', 'dorm', [['todos', 'Todos'], ['0', 'Mono'], ['1', '1'], ['2', '2'], ['3', '3+']]);
     segmento('tipo', 'tipo', [['todos', 'Todos'], ['apartamento', 'Apartamento'], ['casa', 'Casa']]);
+    segmento('duracion', 'duracion', [['todas', 'Todas'], ['anual', 'Anual'], ['temporada', 'Temporada'], ['invernal', 'Invernal'], ['sin', 'Sin dato']]);
     pintarToggles();
     document.getElementById('orden').value = f.orden;
 
@@ -479,7 +493,7 @@ td small { color: var(--muted); }
     // El orden no cuenta como filtro: cambiarlo no muestra "Limpiar filtros".
     const sinOrden = (o) => JSON.stringify({ ...o, orden: null });
     document.getElementById('limpiar').hidden = sinOrden(f) === sinOrden(INICIAL);
-    const activos = f.zonas.length + (f.pmin !== '') + (f.pmax !== '') + (f.dorm !== 'todos') + (f.tipo !== 'todos') + f.nuevas + f.amueblado + f.foto;
+    const activos = f.zonas.length + (f.pmin !== '') + (f.pmax !== '') + (f.dorm !== 'todos') + (f.tipo !== 'todos') + (f.duracion !== 'todas') + f.nuevas + f.amueblado + f.foto;
     document.getElementById('nf').textContent = activos ? '(' + activos + ')' : '';
 
     if (!PUBS.length) {

@@ -4,7 +4,7 @@
 // priorizando las de fecha de publicación más reciente (y, a igual fecha, las que nunca se vieron).
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { abrirDb, hoy, ahora, normalizarUrl, PLATAFORMAS, DATOS } from './db.mjs';
+import { abrirDb, hoy, ahora, normalizarUrl, detectarDuracion, DURACIONES, PLATAFORMAS, DATOS } from './db.mjs';
 
 const MAX_POR_PLATAFORMA = 50;
 const MAX_BYTES_FOTO = 150_000;
@@ -30,6 +30,10 @@ const buscarPorUrl = db.prepare('SELECT id FROM publicaciones WHERE url = ?');
 const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : null);
 const numero = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const fecha = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+const duracionIndicada = (v) => {
+  const lista = [].concat(v ?? []).filter((d) => DURACIONES.includes(d));
+  return lista.length ? DURACIONES.filter((d) => lista.includes(d)).join(',') : null;
+};
 
 const porPlataforma = new Map(PLATAFORMAS.map((p) => [p, new Map()]));
 const errores = [];
@@ -69,6 +73,8 @@ for (const p of entrada.publicaciones ?? []) {
     extras: Array.isArray(p.extras) ? JSON.stringify(p.extras.filter((e) => typeof e === 'string')) : null,
     descripcion: texto(p.descripcion),
     fecha_publicacion: fecha(p.fecha_publicacion),
+    // La que indicó el agente, si es válida; si no, la que se lee en el título, la descripción o la URL.
+    duracion: duracionIndicada(p.duracion) ?? detectarDuracion(`${titulo} ${texto(p.descripcion) ?? ''} ${url}`),
     imagen_url: imagen,
     yaVista: Boolean(buscarPorUrl.get(url)),
   });
@@ -110,9 +116,9 @@ function elegir(candidatas, max) {
 const dia = hoy();
 const upsert = db.prepare(`
   INSERT INTO publicaciones (plataforma, url, titulo, departamento, zona, tipo, dormitorios,
-    precio, moneda, extras, descripcion, fecha_publicacion, imagen_url, primera_vez, ultima_vez)
+    precio, moneda, extras, descripcion, fecha_publicacion, duracion, imagen_url, primera_vez, ultima_vez)
   VALUES (:plataforma, :url, :titulo, :departamento, :zona, :tipo, :dormitorios,
-    :precio, :moneda, :extras, :descripcion, :fecha_publicacion, :imagen_url, :dia, :dia)
+    :precio, :moneda, :extras, :descripcion, :fecha_publicacion, :duracion, :imagen_url, :dia, :dia)
   ON CONFLICT(url) DO UPDATE SET
     titulo = excluded.titulo,
     departamento = coalesce(excluded.departamento, departamento),
@@ -124,6 +130,7 @@ const upsert = db.prepare(`
     extras = coalesce(excluded.extras, extras),
     descripcion = coalesce(excluded.descripcion, descripcion),
     fecha_publicacion = coalesce(excluded.fecha_publicacion, fecha_publicacion),
+    duracion = CASE WHEN excluded.duracion <> '' THEN excluded.duracion ELSE duracion END,
     imagen_url = coalesce(excluded.imagen_url, imagen_url),
     ultima_vez = excluded.ultima_vez,
     veces_visto = veces_visto + 1

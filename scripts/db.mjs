@@ -19,6 +19,18 @@ const SIN_QUERY = [
   /^(apartamento|casa|articulo|inmueble|terreno|local|oficina)\.mercadolibre\.com\.uy$/,
 ];
 
+// Duración del alquiler según lo que diga el aviso (título, descripción o el texto de su URL).
+// Un aviso puede ser de más de una ("anual y temporada"); se guarda como lista separada por comas, o '' si no lo dice.
+export const DURACIONES = ['anual', 'temporada', 'invernal'];
+const PATRONES_DURACION = {
+  anual: /anual|todo el a[ñn]o/i,
+  temporada: /temporad|tempora(l|ri)|verano|quincena|por d[ií]a|enero|febrero|diciembre a marzo/i,
+  invernal: /invern|invierno|marzo a diciembre/i,
+};
+export function detectarDuracion(texto) {
+  return DURACIONES.filter((d) => PATRONES_DURACION[d].test(texto ?? '')).join(',');
+}
+
 export function hoy() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: ZONA_HORARIA });
 }
@@ -80,5 +92,11 @@ export function abrirDb() {
       PRIMARY KEY (corrida_id, publicacion_id)
     );
   `);
+  const columnas = db.prepare('PRAGMA table_info(publicaciones)').all().map((c) => c.name);
+  if (!columnas.includes('duracion')) db.exec('ALTER TABLE publicaciones ADD COLUMN duracion TEXT');
+  // Completa la duración de los avisos guardados antes de que existiera la columna.
+  const pendientes = db.prepare('SELECT id, url, titulo, descripcion FROM publicaciones WHERE duracion IS NULL').all();
+  const fijar = db.prepare('UPDATE publicaciones SET duracion = ? WHERE id = ?');
+  for (const p of pendientes) fijar.run(detectarDuracion(`${p.titulo} ${p.descripcion ?? ''} ${p.url}`), p.id);
   return db;
 }
