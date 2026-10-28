@@ -93,6 +93,7 @@ main .wrap { padding-block: 24px 64px; display: grid; gap: 28px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 28px 18px; }
 .card { display: grid; gap: 10px; min-width: 0; align-content: start; }
 .photo { position: relative; aspect-ratio: 1 / 0.95; border-radius: var(--radius); overflow: hidden; }
+.photo-link { display: block; width: 100%; height: 100%; }
 .photo img, .photo .art { width: 100%; height: 100%; display: block; object-fit: cover; }
 .card:hover .photo img { filter: brightness(.96); }
 .badge {
@@ -384,27 +385,35 @@ td small { color: var(--muted); }
 
   // Tarjetas
   function tarjeta(p) {
-    const a = el('a', 'card');
-    // Solo links http(s): los datos vienen de sitios de terceros y no se confía en ellos.
-    a.href = /^https?:\/\//i.test(p.url || '') ? p.url : '#';
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.title = p.titulo;
+    // La tarjeta no es un link: el corazón tiene que quedar fuera de todo link, porque el visor
+    // abre los links antes de que el botón pueda frenarlo. Foto y texto son dos links al aviso.
+    const card = el('div', 'card');
+    const enlace = (cls) => {
+      const a = el('a', cls);
+      // Solo links http(s): los datos vienen de sitios de terceros y no se confía en ellos.
+      a.href = /^https?:\/\//i.test(p.url || '') ? p.url : '#';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.title = p.titulo;
+      return a;
+    };
     const foto = el('div', 'photo');
+    const fotoLink = enlace('photo-link');
     if (p.foto) {
       const img = el('img');
       img.src = p.foto;
       img.alt = p.titulo;
       img.loading = 'lazy';
-      foto.append(img);
+      fotoLink.append(img);
     } else {
-      foto.innerHTML = ilustracion(p);
+      fotoLink.innerHTML = ilustracion(p);
     }
     const nueva = esNueva(p);
     const badge = el('span', 'badge');
     if (nueva) badge.append(el('i'));
     badge.append(document.createTextNode(nueva ? 'Nueva' : NOMBRE[p.plataforma]));
-    foto.append(badge);
+    fotoLink.append(badge);
+    foto.append(fotoLink);
     const fav = el('button', 'fav');
     fav.type = 'button';
     fav.setAttribute('aria-label', 'Guardar aviso');
@@ -412,6 +421,7 @@ td small { color: var(--muted); }
     fav.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 28s-11-6.6-11-15a6 6 0 0 1 11-3.4A6 6 0 0 1 27 13c0 8.4-11 15-11 15z"/></svg>';
     fav.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       favoritas.has(p.url) ? favoritas.delete(p.url) : favoritas.add(p.url);
       escribir('favoritas', [...favoritas]);
       fav.setAttribute('aria-pressed', String(favoritas.has(p.url)));
@@ -420,7 +430,7 @@ td small { color: var(--muted); }
     });
     foto.append(fav);
 
-    const meta = el('div', 'meta');
+    const meta = enlace('meta');
     meta.append(el('h3', null, (TIPO[p.tipo] || 'Propiedad') + ' en ' + zonaDe(p)));
     const pr = el('p', 'pr');
     pr.append(el('b', null, precioTxt(p)));
@@ -433,8 +443,8 @@ td small { color: var(--muted); }
     linea.append(document.createTextNode([nueva ? NOMBRE[p.plataforma] : null,
       p.fecha_publicacion ? 'publicado ' + fechaCorta(p.fecha_publicacion) : 'visto ' + fechaCorta(p.primera_vez)].filter(Boolean).join(' · ')));
     meta.append(linea);
-    a.append(foto, meta);
-    return a;
+    card.append(foto, meta);
+    return card;
   }
 
   // Cada tarjeta se arma una sola vez y se reutiliza al filtrar, así las fotos no se vuelven a decodificar.
