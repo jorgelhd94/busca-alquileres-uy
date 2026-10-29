@@ -57,6 +57,15 @@ Guarda los criterios confirmados en `criterios.json`, en la misma carpeta que es
 
 Si el usuario invoca el skill y `criterios.json` ya existe, muéstrale los criterios guardados y pregúntale (con `AskUserQuestion`) si quiere buscar con esos o hacer el quiz de nuevo.
 
+### Otra búsqueda aparte
+
+Si el usuario quiere una búsqueda distinta sin tocar la principal (otras zonas u otro presupuesto, con su propio reporte y su propio link), créala en `busquedas/<nombre>/`, en la carpeta de este SKILL.md. `<nombre>` va en minúsculas y con guiones (`apto-anual`). Esa carpeta guarda todo lo de esa búsqueda: `criterios.json` (con un campo `nombre` corto, que también es el título del artefacto, por ejemplo `"nombre": "Apto anual Maldonado"`), `artifact.json`, la base, las fotos y el reporte.
+
+- Del quiz, pregunta solo lo que el usuario no haya dicho ya.
+- Corre los scripts de los pasos 4 y 5 con la variable `ALQUILERES_DATOS` apuntando a esa carpeta, por ejemplo `ALQUILERES_DATOS="<carpeta del skill>/busquedas/apto-anual" node --no-warnings ...`.
+- En el paso 5 copia el reporte al scratchpad con otro nombre (`<nombre>.html`) y usa el `artifact.json` de esa carpeta. La primera vez no existe: publica sin `url` (con `icon: "house"`) y guarda ahí la URL que devuelve.
+- `facebook_uso.json` es uno solo, en la carpeta de este SKILL.md: el tope de 100 por día es de la cuenta de Facebook y lo suman todas las búsquedas.
+
 ## 3. Búsqueda
 
 Busca en estos sitios con **Claude in Chrome** (`mcp__claude-in-chrome__*`), que usa el Chrome del usuario con sus sesiones de siempre. No uses el navegador integrado de la app: ahí las sesiones de Facebook y Mercado Libre se pierden y habría que iniciarlas de nuevo a cada rato. Lee las páginas con `get_page_text`, `read_page` o `javascript_tool`, no con capturas. Haz una búsqueda por departamento y sitio.

@@ -49,7 +49,14 @@ const corridas = db
 
 const datos = { generado: ahora(), publicaciones, corridas };
 const json = JSON.stringify(datos).replace(/</g, '\\u003c');
-const plantilla = readFileSync(join(RAIZ, 'plantilla', 'reporte.html'), 'utf8');
+let plantilla = readFileSync(join(RAIZ, 'plantilla', 'reporte.html'), 'utf8');
+// Una búsqueda con nombre (busquedas/<nombre>/criterios.json) lleva su nombre en el título del artefacto.
+const criteriosPropios = join(DATOS, 'criterios.json');
+const nombre = existsSync(criteriosPropios) && JSON.parse(readFileSync(criteriosPropios, 'utf8')).nombre;
+if (typeof nombre === 'string' && nombre.trim()) {
+  const titulo = nombre.trim().replace(/[<>&"]/g, '');
+  plantilla = plantilla.replace('<title>Busca Alquileres UY</title>', () => `<title>${titulo}</title>`);
+}
 const salida = join(DATOS, 'reporte.html');
 writeFileSync(salida, plantilla.replace('__DATOS__', () => json));
 
